@@ -1,0 +1,17 @@
+numpy
+pandas
+scikit-learn
+joblib
+chromadb
+sentence-transformers
+langchain-huggingface
+torch
+fastapi
+streamlit
+uvicorn
+requests
+transformers
+datasets
+groq
+accelerate
+matplotlib
