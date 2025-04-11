@@ -4,6 +4,11 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+import joblib
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, r2_score
 
 # Load environment variables (GROQ API key)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -11,69 +16,75 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # Initialize embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Initialize ChromaDB Client
-chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection(name="project_risks")
-
 # Initialize Groq client
 if GROQ_API_KEY:
     groq_client = Groq(api_key=GROQ_API_KEY)
 else:
-    st.error("GROQ_API_KEY is not set. Please add it in Streamlit Secrets!")
-    st.stop()
+    st.error("GROQ_API_KEY not found. Please set it in Streamlit secrets.")
 
-# Streamlit UI
+# Initialize ChromaDB
+chroma_client = chromadb.Client()
+collection = chroma_client.get_or_create_collection(name="project_risks")
+
+# Load Random Forest Model (Dummy example, since you don't have pkl file)
+# Create a dummy model to prevent error
+model = RandomForestRegressor()
+scaler = StandardScaler()
+
+# Streamlit App
 st.title("AI Risk Management Chatbot")
-st.write("Upload your document and start asking questions!")
 
-uploaded_file = st.file_uploader("Upload a file", type=["csv", "pdf", "txt", "docx"])
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
 if uploaded_file is not None:
-    file_text = uploaded_file.read().decode("utf-8", errors="ignore")
+    df = pd.read_csv(uploaded_file)
+    st.write("### Uploaded Data", df)
 
-    # Embed and store the file text
-    embedding = embedding_model.encode(file_text)
-    collection.add(
-        documents=[file_text],
-        embeddings=[embedding.tolist()],
-        metadatas=[{"source": uploaded_file.name}],
-        ids=[uploaded_file.name]
+    # Embed all rows into ChromaDB
+    texts = df.apply(lambda row: " ".join(map(str, row.values)), axis=1).tolist()
+    embeddings = embedding_model.encode(texts).tolist()
+
+    for i, (text, embedding) in enumerate(zip(texts, embeddings)):
+        collection.add(
+            documents=[text],
+            embeddings=[embedding],
+            metadatas=[{"row": i}]
+        )
+
+    st.success("Data embedded successfully!")
+
+query = st.text_input("Ask a question related to the uploaded data:")
+
+if st.button("Get Answer") and query:
+    query_embedding = embedding_model.encode([query]).tolist()[0]
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3,
+        include=['documents', 'distances']
     )
-    st.success("Document embedded successfully!")
 
-# User Question
-question = st.text_input("Ask your question:")
+    retrieved_docs = "\n".join(results['documents'][0])
+    
+    prompt = f"""
+    Use the following document context to answer the question:
 
-if st.button("Submit"):
-    if not question:
-        st.warning("Please enter a question.")
-    else:
-        # Embed question
-        question_embedding = embedding_model.encode(question)
+    {retrieved_docs}
 
-        # Search similar docs
-        results = collection.query(
-            query_embeddings=[question_embedding.tolist()],
-            n_results=1
-        )
+    Question: {query}
+    Answer:
+    """
 
-        retrieved_text = results['documents'][0][0] if results['documents'] else "No relevant document found."
+    response = groq_client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
 
-        # Send to GROQ
-        prompt = f"Use the following document context to answer:\n{context}\n\nQuestion: {query}"
+    answer = response.choices[0].message.content
+    st.write("### Answer:")
+    st.success(answer)
 
-
-Context:
-{retrieved_text}
-
-Question: {question}
-Answer:"
-
-        completion = groq_client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        answer = completion.choices[0].message.content
-        st.subheader("Answer:")
-        st.write(answer)
+st.markdown("---")
+st.caption("Developed with ❤️ using Streamlit, ChromaDB, Groq API, and HuggingFace Models.")
