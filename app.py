@@ -18,10 +18,6 @@ if GROQ_API_KEY:
 else:
     st.error("GROQ_API_KEY not found!")
 
-# Load optimized model
-model = joblib.load("optimized_risk_prediction_model.pkl")
-scaler = joblib.load("scaler.pkl")
-
 # Streamlit UI
 st.title("AI Risk Management Chatbot")
 
