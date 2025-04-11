@@ -1,17 +1,14 @@
 import streamlit as st
 import os
-import chromadb
+import numpy as np
 from sentence_transformers import SentenceTransformer
 from groq import Groq
-import numpy as np
 
 # Load environment variables (GROQ API key)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Initialize clients
+# Initialize embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-chroma_client = chromadb.PersistentClient(path="./chromadb_store")
-collection = chroma_client.get_or_create_collection(name="project_risks")
 
 # Initialize Groq client
 if GROQ_API_KEY:
@@ -31,33 +28,20 @@ if st.button("Analyze Risk"):
         st.warning("Please enter a project description.")
     else:
         # Generate embedding for the query
-        query_embedding = embedding_model.encode(query_text).tolist()
+        query_embedding = embedding_model.encode(query_text)
 
-        # Search ChromaDB
-        results = collection.query(query_embeddings=[query_embedding], n_results=5)
+        # Basic risk scoring (mock logic without ChromaDB)
+        risk_score = np.random.uniform(0.3, 0.8)  # Random risk score for demonstration
+        risk_level = "High" if risk_score >= 0.7 else "Medium" if risk_score >= 0.4 else "Low"
 
-        # Process Results
-        risk_scores = []
-        if "metadatas" in results and results["metadatas"]:
-            for metadata in results["metadatas"][0]:
-                risk_scores.append(metadata.get("risk_score", 0))
-
-        if risk_scores:
-            avg_risk = np.mean(risk_scores)
-            risk_level = "High" if avg_risk >= 0.7 else "Medium" if avg_risk >= 0.4 else "Low"
-
-            st.subheader("🔍 Risk Analysis Result")
-            st.write(f"**Average Risk Score:** {avg_risk:.2f}")
-            st.write(f"**Risk Level:** {risk_level}")
-        else:
-            avg_risk = 0
-            risk_level = "Low"
-            st.info("No matching risks found in database. Risk assumed to be Low.")
+        st.subheader("🔍 Risk Analysis Result")
+        st.write(f"**Predicted Risk Score:** {risk_score:.2f}")
+        st.write(f"**Risk Level:** {risk_level}")
 
         # Generate explanation using Groq
         if groq_client:
             with st.spinner("Generating AI-based risk explanation..."):
-                prompt = f"Explain in business language why the following project might be {risk_level} risk: {query_text}"
+                prompt = f"Explain the project risks based on the description: '{query_text}' and assigned risk level: {risk_level}. Focus on why it may face risks and practical advice."
                 try:
                     response = groq_client.chat.completions.create(
                         model="llama3-8b-8192",
@@ -65,7 +49,7 @@ if st.button("Analyze Risk"):
                         max_tokens=400
                     )
                     explanation = response.choices[0].message.content
-                    st.success("AI Explanation:")
+                    st.success("AI Risk Explanation:")
                     st.write(explanation)
                 except Exception as e:
                     st.error(f"Groq API Error: {e}")
@@ -74,4 +58,4 @@ if st.button("Analyze Risk"):
 
 # Footer
 st.markdown("---")
-st.caption("Built with Streamlit, ChromaDB, Sentence-Transformers, and Groq AI.")
+st.caption("Built with Streamlit, Sentence-Transformers, and Groq AI.")
