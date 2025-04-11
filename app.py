@@ -60,7 +60,8 @@ if st.button("Submit"):
         retrieved_text = results['documents'][0][0] if results['documents'] else "No relevant document found."
 
         # Send to GROQ
-        prompt = f"Use the following document context to answer:
+        prompt = f"Use the following document context to answer:\n{context}\n\nQuestion: {query}"
+
 
 Context:
 {retrieved_text}
