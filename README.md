@@ -57,5 +57,4 @@ Risk ID, Description, Impact, Probability
 
 Each row will be semantically indexed and used for answering questions.
 
-Contact:
-For support or inquiries, please email: info@citizenone.in
+
